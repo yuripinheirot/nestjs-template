@@ -1,12 +1,8 @@
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import {
-  ConsoleLogger,
-  ConsoleLoggerOptions,
-  Logger,
-  ValidationPipe,
-} from '@nestjs/common';
+import { ConsoleLogger, ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
+
+import { AppModule } from './app.module';
 
 async function bootstrap() {
   const logger = new ConsoleLogger({ timestamp: true });
@@ -33,10 +29,13 @@ async function bootstrap() {
     }),
   );
 
-  const appPort = process.env.APP_PORT;
+  const { APP_PORT, ENV } = process.env;
 
-  await app.listen(appPort, () => {
-    logger.log(`Application is running on port ${appPort}`, 'NestApplication');
+  await app.listen(APP_PORT, () => {
+    logger.log(
+      `Server started successfully 🚀 | Port: ${APP_PORT} | Env: ${ENV}`,
+      'NestApplication',
+    );
   });
 }
 

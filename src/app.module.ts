@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
-import { StatusModule } from './modules/status/status.module';
 import { ConfigModule } from '@nestjs/config';
+
+import { StatusModule } from './modules/status/status.module';
 
 @Global()
 @Module({

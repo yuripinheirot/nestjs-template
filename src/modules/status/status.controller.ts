@@ -1,6 +1,6 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Logger } from '@nestjs/common';
+
 import { StatusService } from './status.service';
-import { Logger } from '@nestjs/common';
 @Controller('status')
 export class StatusController {
   constructor(
