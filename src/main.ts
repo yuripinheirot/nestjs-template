@@ -33,7 +33,7 @@ async function bootstrap() {
     }),
   );
 
-  const appPort = 3003;
+  const appPort = process.env.APP_PORT;
 
   await app.listen(appPort, () => {
     logger.log(`Application is running on port ${appPort}`, 'NestApplication');
