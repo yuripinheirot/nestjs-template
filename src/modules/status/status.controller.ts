@@ -1,22 +1,17 @@
-import { Controller, Get, Logger } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { StatusService } from './status.service';
+
+@ApiTags('Status')
 @Controller('status')
 export class StatusController {
-  constructor(
-    private readonly statusService: StatusService,
-    private readonly logger: Logger,
-  ) {}
+  constructor(private readonly statusService: StatusService) {}
 
   @Get()
+  @ApiOperation({ summary: 'Obtém o status do servidor' })
+  @ApiResponse({ status: 200, description: 'Service is running' })
   getStatus() {
-    this.logger.debug({
-      origin: '*',
-      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-      preflightContinue: false,
-      optionsSuccessStatus: 204,
-      allowedHeaders: '*',
-    });
     return this.statusService.getStatus();
   }
 }
