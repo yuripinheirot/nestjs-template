@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 
-import { AppModule } from '@/app.module';
+import { AppModule } from '@/modules/app.module';
 
 export const buildTestingModule = () => {
   return Test.createTestingModule({
