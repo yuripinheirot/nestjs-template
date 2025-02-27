@@ -14,7 +14,7 @@ networks:
 services:
   base: &base
     hostname: base
-    image: node:20-alpine
+    image: node:22.14-alpine3.20
     working_dir: /home/node/app
     volumes:
       - ./:/home/node/app
