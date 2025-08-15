@@ -9,4 +9,4 @@ import { StatusModule } from './status/status.module';
   controllers: [],
   providers: [],
 })
-export class AppModule { }
+export class AppModule {}
