@@ -1,0 +1,1209 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Cursor Rules - Econome API Code Style
+
+## Estrutura de Módulos
+
+### Organização de Arquivos
+- Cada módulo deve seguir a estrutura: `controllers/`, `services/`, `repository/`, `protocols/`
+- Controllers devem estar em subpastas por funcionalidade: `controllers/create/`, `controllers/get-balance/`
+- Services devem estar na pasta `services/` com nome descritivo: `create.bank-account.service.ts`
+- Repository deve estar em `repository/` com nome no plural: `bank-accounts.repository.ts`
+- Protocols devem estar em `protocols/` com subpasta `validators/` para DTOs de request
+
+### Nomenclatura de Arquivos
+- Use kebab-case para nomes de arquivos: `create.bank-account.controller.ts`
+- Separe funcionalidades com ponto: `get-balance.bank-account.service.ts`
+- Use sufixos descritivos: `.controller.ts`, `.service.ts`, `.repository.ts`, `.dto.ts`, `.swagger.ts`
+
+## Imports e Organização
+
+### Ordem de Imports
+```typescript
+// 1. Imports do NestJS/framework
+import { Body, Post } from '@nestjs/common';
+
+// 2. Imports locais do mesmo módulo (swagger)
+import { createBankAccountSwagger } from './create.bank-account.swagger';
+
+// 3. Imports globais da aplicação (com @/)
+import { AppControllerType } from '@/models/types/controller.type';
+import { User } from '@/decorators/user.decorator';
+import { TokenData } from '@/models/types/token-data.type';
+import { BankAccountResponse } from '@/models/validators/bank-account.response';
+import { AppController } from '@/decorators/app-controller.decorator';
+import { ControllerSwagger } from '@/decorators/controller-swagger.decorator';
+
+// 4. Imports relativos do mesmo módulo
+import { CreateBankAccountService } from '../../services/create.bank-account.service';
+import { CreateBankAccountRequestDTO } from '../../protocols/validators/create.bank-account.request.dto';
+```
+
+### Separadores de Imports
+- Use linha em branco entre grupos de imports
+- Mantenha imports relacionados juntos
+
+## Controllers
+
+### Estrutura de Controller
+```typescript
+@AppController({
+  tag: 'Bank Accounts',
+  path: 'bank-accounts',
+})
+export class CreateBankAccountController implements AppControllerType {
+  constructor(
+    private readonly createAccountService: CreateBankAccountService,
+  ) {}
+
+  @Post()
+  @ControllerSwagger(createBankAccountSwagger)
+  async handle(
+    @Body() createAccountDto: CreateBankAccountRequestDTO,
+    @User() user: TokenData,
+  ) {
+    const dto = {
+      ...createAccountDto,
+      userId: user.id,
+    };
+
+    const account = await this.createAccountService.handle(dto);
+
+    return new BankAccountResponse(account);
+  }
+}
+```
+
+### Padrões de Controller
+- Sempre implemente `AppControllerType`
+- Use `@AppController` com tag e path
+- Use `@ControllerSwagger` para documentação
+- Extraia `userId` do token e adicione ao DTO
+- Sempre retorne um Response model (ex: `BankAccountResponse`)
+- Use nomes descritivos para métodos: `handle`
+
+## Services
+
+### Estrutura de Service
+```typescript
+@Injectable()
+export class CreateBankAccountService implements AppService {
+  constructor(private readonly accountsRepository: BankAccountsRepository) {}
+
+  async validateDto(data: CreateBankAccountDTO) {
+    const { userId, description } = data;
+
+    const account = await this.accountsRepository.findByDescription({
+      userId,
+      description,
+    });
+
+    if (account) {
+      throw new ConflictException('Account already exists');
+    }
+  }
+
+  async handle(data: CreateBankAccountDTO) {
+    await this.validateDto(data);
+
+    return this.accountsRepository.create(data);
+  }
+}
+```
+
+### Padrões de Service - SOLID, Clean Code, KISS e DDD
+
+#### Princípios SOLID Aplicados
+
+**Single Responsibility Principle (SRP):**
+- Cada método deve ter uma única responsabilidade
+- Quebre validações complexas em métodos específicos: `validateUserPermissions`, `validateAccountData`
+- Separe criação de entidades em métodos dedicados: `createAccountEntity`
+
+**Open/Closed Principle (OCP):**
+- Use injeção de dependência para serviços de validação
+- Permita extensão sem modificação através de interfaces
+- Use estratégias para diferentes tipos de validação
+
+**Liskov Substitution Principle (LSP):**
+- Implemente interfaces consistentes: `AppService`
+- Mantenha contratos claros entre métodos
+- Use tipos abstratos quando possível
+
+**Interface Segregation Principle (ISP):**
+- Crie interfaces específicas para cada responsabilidade
+- Evite interfaces monolíticas
+- Use interfaces pequenas e focadas
+
+**Dependency Inversion Principle (DIP):**
+- Dependa de abstrações, não de implementações
+- Injete dependências através do constructor
+- Use interfaces para acoplamento fraco
+
+#### Clean Code e KISS
+
+**Método Handle Simples:**
+- O método `handle` deve ser o mais simples possível
+- Máximo 3-5 linhas de lógica principal
+- Delegue responsabilidades para métodos específicos
+- Use nomes descritivos que expliquem a intenção
+
+**Quebra de Responsabilidades:**
+```typescript
+// ❌ Método complexo
+async handle(data: CreateBankAccountDTO) {
+  const user = await this.userRepository.findById(data.userId);
+  if (!user) throw new NotFoundException('User not found');
+  if (!user.canCreateAccount) throw new ForbiddenException('User cannot create account');
+  
+  const existingAccount = await this.accountsRepository.findByDescription(data.description);
+  if (existingAccount) throw new ConflictException('Account already exists');
+  
+  if (data.initialValue < 0) throw new BadRequestException('Initial value cannot be negative');
+  
+  const account = await this.accountsRepository.create({
+    description: data.description.trim(),
+    initialValue: BigInt(data.initialValue),
+    userId: data.userId,
+    active: true,
+  });
+  
+  return account;
+}
+
+// ✅ Método simples com responsabilidades separadas
+async handle(data: CreateBankAccountDTO): Promise<BankAccount> {
+  await this.validateUserPermissions(data.userId);
+  await this.validateAccountData(data);
+  
+  return this.createAccountEntity(data);
+}
+```
+
+**Nomes de Métodos Descritivos:**
+- Use verbos que descrevam a ação: `validateUserPermissions`, `createAccountEntity`
+- Evite nomes genéricos: `process`, `execute`, `doSomething`
+- Seja específico sobre o que o método faz
+- Use nomes que contem uma história
+
+#### Domain-Driven Design (DDD)
+
+**Entidades de Domínio:**
+- Represente conceitos de negócio como entidades
+- Use value objects para valores complexos
+- Mantenha lógica de domínio nos services
+- Evite anêmica de domínio
+
+**Serviços de Domínio:**
+```typescript
+// Serviço de validação de domínio
+@Injectable()
+export class AccountValidationService {
+  async validateDescription(description: string): Promise<void> {
+    if (!description?.trim()) {
+      throw new BadRequestException('Description is required');
+    }
+    
+    if (description.length > 100) {
+      throw new BadRequestException('Description too long');
+    }
+  }
+
+  async validateInitialValue(value: number): Promise<void> {
+    if (value < 0) {
+      throw new BadRequestException('Initial value cannot be negative');
+    }
+    
+    if (value > 999999999) {
+      throw new BadRequestException('Initial value too high');
+    }
+  }
+
+  async validateAccountNotExists(data: CreateBankAccountDTO): Promise<void> {
+    const existingAccount = await this.accountsRepository.findByDescription({
+      userId: data.userId,
+      description: data.description,
+    });
+
+    if (existingAccount) {
+      throw new ConflictException('Account with this description already exists');
+    }
+  }
+}
+```
+
+**Ubiquitous Language:**
+- Use termos do domínio de negócio
+- Mantenha consistência na nomenclatura
+- Evite termos técnicos desnecessários
+- Use nomes que o cliente entenderia
+
+#### Estrutura Recomendada para Services Complexos
+
+```typescript
+@Injectable()
+export class ComplexBusinessService implements AppService {
+  constructor(
+    private readonly repository: Repository,
+    private readonly validationService: ValidationService,
+    private readonly notificationService: NotificationService,
+    private readonly auditService: AuditService,
+  ) {}
+
+  // 1. Validações de entrada
+  async validateInput(data: InputDTO): Promise<void> {
+    await this.validationService.validateRequiredFields(data);
+    await this.validationService.validateBusinessRules(data);
+  }
+
+  // 2. Validações de permissões
+  async validatePermissions(userId: string): Promise<void> {
+    await this.validationService.validateUserExists(userId);
+    await this.validationService.validateUserPermissions(userId);
+  }
+
+  // 3. Lógica de negócio principal
+  async executeBusinessLogic(data: InputDTO): Promise<Entity> {
+    const processedData = await this.processData(data);
+    const entity = await this.createEntity(processedData);
+    
+    return entity;
+  }
+
+  // 4. Ações pós-processamento
+  async performPostActions(entity: Entity): Promise<void> {
+    await this.notificationService.notifyCreation(entity);
+    await this.auditService.logCreation(entity);
+  }
+
+  // 5. Método principal simples
+  async handle(data: InputDTO): Promise<Entity> {
+    await this.validateInput(data);
+    await this.validatePermissions(data.userId);
+    
+    const entity = await this.executeBusinessLogic(data);
+    
+    await this.performPostActions(entity);
+    
+    return entity;
+  }
+}
+```
+
+#### Boas Práticas Adicionais
+
+**Tratamento de Erros:**
+- Use exceções específicas do domínio
+- Forneça mensagens de erro claras
+- Log erros apropriadamente
+- Não exponha detalhes internos
+
+**Performance:**
+- Use async/await consistentemente
+- Evite operações síncronas desnecessárias
+- Considere cache para validações frequentes
+- Use transações quando necessário
+
+**Testabilidade:**
+- Mantenha métodos pequenos e focados
+- Use injeção de dependência
+- Evite dependências hardcoded
+- Facilite mock de dependências
+
+**Documentação:**
+- Use JSDoc para métodos complexos
+- Documente exceções lançadas
+- Explique regras de negócio importantes
+- Mantenha exemplos atualizados
+
+## Mappers
+
+### Estrutura de Mapper
+```typescript
+@Injectable()
+export class InvoiceCardMapper {
+  mapRequestToDto(
+    user: TokenData,
+    queryParams: GetInvoiceCardRequestDTO,
+  ): GetInvoiceCardDTO {
+    return {
+      userId: user.id,
+      cardId: queryParams.cardId,
+      month: queryParams.month,
+      year: queryParams.year,
+    };
+  }
+
+  mapCardToResponse(card: Card): CardResponse {
+    return {
+      id: card.id,
+      description: card.description,
+      totalLimit: card.totalLimit,
+      closingDay: card.closingDay,
+      dueDay: card.dueDay,
+    };
+  }
+
+  mapTransactionsToResponse(transactions: Transaction[]): TransactionResponse[] {
+    return transactions.map((transaction) => ({
+      id: transaction.id,
+      description: transaction.description,
+      value: transaction.value,
+      type: transaction.type,
+      createdAt: transaction.createdAt,
+      categoryId: transaction.categoryId,
+    }));
+  }
+
+  // Exemplo de mapeamento complexo - múltiplas entidades para uma resposta
+  mapInvoiceResponse(
+    card: Card,
+    transactions: Transaction[],
+    periodData: {
+      invoiceMonth: number;
+      invoiceYear: number;
+      periodStart: Date;
+      periodEnd: Date;
+    },
+    totals: {
+      totalExpenses: number;
+      totalIncome: number;
+      invoiceBalance: number;
+    },
+  ) {
+    return {
+      cardId: card.id,
+      cardDescription: card.description,
+      month: periodData.invoiceMonth,
+      year: periodData.invoiceYear,
+      closingDay: card.closingDay,
+      dueDay: card.dueDay,
+      totalLimit: card.totalLimit,
+      invoiceBalance: BigInt(totals.invoiceBalance),
+      totalExpenses: BigInt(totals.totalExpenses),
+      totalIncome: BigInt(totals.totalIncome),
+      transactions: this.mapTransactionsToResponse(transactions),
+      periodStart: periodData.periodStart,
+      periodEnd: periodData.periodEnd,
+    };
+  }
+}
+```
+
+### Padrões de Mapper
+
+#### Quando Usar Mappers
+- **Transformação de DTOs**: Converter Request DTOs para DTOs internos
+- **Mapeamento de Respostas**: Converter entidades para Response models
+- **Transformação de Arrays**: Mapear arrays de entidades para arrays de responses
+- **Normalização de Dados**: Padronizar formatos de dados
+- **Separação de Responsabilidades**: Isolar lógica de transformação
+- **Construção de Objetos Complexos**: Mapear múltiplas entidades para uma resposta estruturada
+- **Formatação de Dados**: Converter tipos, formatar datas, calcular valores derivados
+
+#### Nomenclatura e Estrutura
+- Use sufixo `.mapper.ts` para arquivos de mapper
+- Use nomes descritivos: `InvoiceCardMapper`, `UserMapper`
+- Coloque mappers em pasta `mappers/` dentro do módulo
+- Use métodos com prefixo `map`: `mapRequestToDto`, `mapEntityToResponse`
+
+#### Injeção de Dependência
+```typescript
+// No controller
+constructor(
+  private readonly getInvoiceCardService: GetInvoiceCardService,
+  private readonly invoiceCardMapper: InvoiceCardMapper,
+) {}
+
+// No módulo
+@Module({
+  providers: [
+    GetInvoiceCardService,
+    InvoiceCardMapper, // Adicione o mapper aos providers
+  ],
+})
+```
+
+#### Exemplo de Uso no Controller
+```typescript
+@Get('invoice')
+@ControllerSwagger(getInvoiceCardSwagger)
+async handle(
+  @User() user: TokenData,
+  @Query() queryParams: GetInvoiceCardRequestDTO,
+) {
+  const invoiceRequestDto = this.invoiceCardMapper.mapRequestToDto(
+    user,
+    queryParams,
+  );
+
+  const invoice = await this.getInvoiceCardService.handle(invoiceRequestDto);
+
+  return new CardInvoiceResponse(invoice);
+}
+```
+
+#### Benefícios dos Mappers
+- **Separação de Responsabilidades**: Controllers focam em HTTP, mappers em transformação
+- **Reutilização**: Mappers podem ser usados em múltiplos controllers
+- **Testabilidade**: Fácil testar transformações isoladamente
+- **Manutenibilidade**: Mudanças de formato centralizadas
+- **Clean Code**: Controllers mais limpos e focados
+
+#### Boas Práticas
+- Mantenha mappers simples e focados
+- Use tipos explícitos para parâmetros e retornos
+- Evite lógica de negócio nos mappers
+- Use nomes descritivos para métodos
+- Considere mappers específicos para casos complexos
+- Documente transformações complexas com JSDoc
+
+#### Mapeamento de Respostas Complexas
+- **Múltiplas Entidades**: Quando a resposta combina dados de várias entidades
+- **Cálculos Derivados**: Quando há transformações de valores
+- **Estruturas Aninhadas**: Quando há arrays ou objetos complexos
+- **Formatação de Dados**: Quando há conversões de tipos ou formatos
+
+**Exemplo de Refatoração:**
+```typescript
+// ❌ No Service - Lógica de mapeamento misturada com lógica de negócio
+async handle(data: GetInvoiceCardDTO) {
+  // ... lógica de negócio ...
+  
+  return {
+    cardId: card.id,
+    cardDescription: card.description,
+    // ... mais mapeamento ...
+  };
+}
+
+// ✅ No Service - Foco na lógica de negócio
+async handle(data: GetInvoiceCardDTO) {
+  // ... lógica de negócio ...
+  
+  return this.invoiceCardMapper.mapInvoiceResponse(
+    card,
+    transactions,
+    periodData,
+    totals,
+  );
+}
+
+// ✅ No Mapper - Foco na transformação de dados
+mapInvoiceResponse(card, transactions, periodData, totals) {
+  return {
+    cardId: card.id,
+    cardDescription: card.description,
+    // ... mapeamento estruturado ...
+  };
+}
+```
+
+## Mappers para Middleware
+
+### Estrutura de Mapper para Middleware
+```typescript
+@Injectable()
+export class EntityMapper {
+  mapRequestToInternalDto(
+    user: TokenData,
+    requestDto: CreateRequestDTO,
+  ): CreateInternalDTO {
+    return {
+      userId: user.id,
+      amount: requestDto.amount,
+      description: requestDto.description,
+      requestTimestamp: new Date().toISOString(),
+    };
+  }
+
+  mapResponseToEntity(response: Response): Entity {
+    return {
+      id: response.data.id,
+      amount: response.data.amount,
+      description: response.data.description,
+      status: response.data.status,
+      createdAt: new Date(response.data.createdAt),
+    };
+  }
+
+  mapEntityToResponse(entity: Entity): Response {
+    return {
+      id: entity.id,
+      amount: entity.amount,
+      description: entity.description,
+      status: entity.status,
+      createdAt: entity.createdAt,
+    };
+  }
+
+  // Mapeamento complexo para múltiplas entidades
+  mapMultiEntityResponse(
+    entityData: Entity,
+    relatedData: Entity,
+    metadata: Entity,
+  ): ComprehensiveResponse {
+    return {
+      entity: this.mapEntityData(entityData),
+      relatedInfo: this.mapEntityData(relatedData),
+      auditTrail: this.mapEntityData(auditData),
+      status: 'success',
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
+```
+
+### Padrões de Mapper para Middleware
+
+#### Quando Usar Mappers em Middleware
+- **Transformação de DTOs**: Converter Request DTOs para DTOs internos
+- **Mapeamento de Respostas**: Converter respostas de APIs para entidades internas
+- **Normalização de Dados**: Padronizar formatos de dados
+- **Separação de Responsabilidades**: Isolar lógica de transformação
+- **Construção de Objetos Complexos**: Mapear múltiplas entidades para uma resposta unificada
+- **Formatação de Dados**: Converter tipos, formatar datas, calcular valores derivados
+- **Auditoria**: Mapear dados de auditoria
+
+#### Nomenclatura e Estrutura para Middleware
+- Use sufixo `.mapper.ts` para arquivos de mapper
+- Use nomes descritivos: `EntityMapper`, `DataMapper`
+- Coloque mappers em pasta `mappers/` dentro do submódulo
+- Use métodos com prefixo `map`: `mapRequestToInternalDto`, `mapExternalResponseToEntity`
+
+#### Injeção de Dependência para Mappers de Middleware
+```typescript
+// No controller
+constructor(
+  private readonly createService: CreateService,
+  private readonly entityMapper: EntityMapper,
+) {}
+
+// No módulo
+@Module({
+  providers: [
+    CreateService,
+    EntityMapper, // Adicione o mapper aos providers
+  ],
+})
+```
+
+#### Exemplo de Uso no Controller de Middleware
+```typescript
+@Post()
+  @ControllerSwagger(createSwagger)
+async handle(
+  @User() user: TokenData,
+  @Body() requestDto: CreateRequestDTO,
+) {
+  const internalDto = this.entityMapper.mapRequestToInternalDto(
+    user,
+    requestDto,
+  );
+
+  const entity = await this.createService.handle(internalDto);
+
+  return this.entityMapper.mapEntityToResponse(entity);
+}
+```
+
+#### Benefícios dos Mappers para Middleware
+- **Separação de Responsabilidades**: Controllers focam em HTTP, mappers em transformação de dados
+- **Reutilização**: Mappers podem ser usados em múltiplos controllers
+- **Testabilidade**: Fácil testar transformações isoladamente
+- **Manutenibilidade**: Mudanças de formato centralizadas
+- **Clean Code**: Controllers mais limpos e focados
+- **Auditoria**: Facilita rastreamento de transformações de dados
+
+#### Boas Práticas para Mappers de Middleware
+- Mantenha mappers simples e focados na transformação
+- Use tipos explícitos para parâmetros e retornos
+- Evite lógica de negócio nos mappers
+- Use nomes descritivos para métodos
+- Considere mappers específicos para cada funcionalidade
+- Documente transformações complexas com JSDoc
+- Inclua informações de auditoria nos mapeamentos
+
+#### Mapeamento de Respostas Complexas de Middleware
+- **Múltiplas Entidades**: Quando a resposta combina dados de várias entidades
+- **Cálculos Derivados**: Quando há transformações de valores
+- **Estruturas Aninhadas**: Quando há arrays ou objetos complexos
+- **Formatação de Dados**: Quando há conversões de tipos ou formatos
+
+**Exemplo de Refatoração para Middleware:**
+```typescript
+// ❌ No Service - Lógica de mapeamento misturada com lógica de negócio
+async handle(data: CreateDTO) {
+  // ... lógica de negócio ...
+  
+  return {
+    id: response.data.id,
+    amount: response.data.amount,
+    description: response.data.description,
+    status: response.data.status,
+    // ... mais mapeamento ...
+  };
+}
+
+// ✅ No Service - Foco na lógica de negócio
+async handle(data: CreateDTO) {
+  // ... lógica de negócio ...
+  
+  return this.entityMapper.mapResponseToEntity(response);
+}
+
+// ✅ No Mapper - Foco na transformação de dados
+mapResponseToEntity(response: Response): Entity {
+  return {
+    id: response.data.id,
+    amount: response.data.amount,
+    description: response.data.description,
+    status: response.data.status,
+    // ... mapeamento estruturado ...
+  };
+}
+```
+
+## Repository
+
+### Estrutura de Repository
+```typescript
+@Injectable()
+export class BankAccountsRepository {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(dto: CreateBankAccountDTO) {
+    return this.prisma.bankAccount.create({
+      data: {
+        description: dto.description,
+        initialValue: dto.initialValue,
+        active: true,
+        user: {
+          connect: {
+            id: dto.userId,
+          },
+        },
+      },
+    });
+  }
+
+  async find(dto: FindBankAccountDto) {
+    return this.prisma.bankAccount.findFirst({
+      where: {
+        id: dto.id,
+        user: {
+          id: dto.userId,
+        },
+      },
+    });
+  }
+}
+```
+
+### Padrões de Repository
+- Use `@Injectable()` decorator
+- Use `PrismaService` como dependência
+- Use nomes descritivos para métodos: `create`, `find`, `findByDescription`
+- Sempre receba DTOs como parâmetros
+- Sempre conecte com usuário através de `userId`
+- Use `findFirst` para consultas únicas
+
+## DTOs e Protocols
+
+### Request DTOs (Validators)
+```typescript
+import { IsNotEmpty, IsString, IsNumber } from 'class-validator';
+
+export class CreateBankAccountRequestDTO {
+  @IsNotEmpty()
+  @IsString()
+  description: string;
+
+  @IsNotEmpty()
+  @IsNumber()
+  initialValue: number;
+}
+```
+
+### Internal DTOs
+```typescript
+export type CreateBankAccountDTO = {
+  description: string;
+  initialValue: number;
+  userId: string;
+};
+```
+
+### Padrões de DTO
+- Use `class` para Request DTOs com validações
+- Use `type` para DTOs internos
+- Use sufixo `RequestDTO` para DTOs de entrada
+- Use sufixo `DTO` para DTOs internos
+- Sempre inclua `userId` em DTOs internos
+- Use decorators de validação: `@IsNotEmpty`, `@IsString`, `@IsNumber`
+
+## Swagger Documentation
+
+### Estrutura de Swagger
+```typescript
+import { ControllerSwaggerType } from '@/decorators/controller-swagger.decorator';
+import { BankAccountResponse } from '@/models/validators/bank-account.response';
+
+import { CreateBankAccountRequestDTO } from '../../protocols/validators/create.bank-account.request.dto';
+
+export const createBankAccountSwagger: ControllerSwaggerType = {
+  summary: 'Create a new bank account',
+  description: 'Create a new bank account for the authenticated user',
+  apiBody: [{ type: CreateBankAccountRequestDTO }],
+  apiResponse: [
+    {
+      status: 201,
+      description: 'Bank account created successfully',
+      type: BankAccountResponse,
+    },
+  ],
+};
+```
+
+### Padrões de Swagger
+- Use `ControllerSwaggerType` como tipo
+- Use nomes descritivos para constantes: `createBankAccountSwagger`
+- Sempre inclua `summary` e `description`
+- Use `apiBody` para POST/PUT requests
+- Use `apiQuery` para GET requests com query params
+- Sempre documente responses com status e tipo
+
+## Módulos
+
+### Estrutura de Módulo
+```typescript
+import { Module } from '@nestjs/common';
+
+import { CreateBankAccountController } from './controllers/create/create.bank-account.controller';
+import { BankAccountsRepository } from './repository/bank-accounts.repository';
+import { CreateBankAccountService } from './services/create.bank-account.service';
+import { GetBalanceBankAccountController } from './controllers/get-balance/get-balance.bank-account.controller';
+import { GetBalanceBankAccountService } from './services/get-balance.bank-account.service';
+
+import { PrismaService } from '@/services/prisma.service';
+
+import { TransactionsModule } from '../transactions/transactions.module';
+
+@Module({
+  imports: [forwardRef(() => TransactionsModule)],
+  controllers: [CreateBankAccountController, GetBalanceBankAccountController],
+  providers: [
+    BankAccountsRepository,
+    CreateBankAccountService,
+    PrismaService,
+    GetBalanceBankAccountService,
+  ],
+})
+export class BankAccountsModule {}
+```
+
+### Padrões de Módulo
+- Use `forwardRef()` para dependências circulares
+- Agrupe imports por tipo (controllers, services, globais, outros módulos)
+- Sempre inclua `PrismaService` nos providers
+- Use linha em branco entre grupos de imports
+
+## Response Models
+
+### Estrutura de Response
+```typescript
+import { BankAccount } from '@prisma/client';
+import { Exclude, Expose } from 'class-transformer';
+
+@Exclude()
+export class BankAccountResponse implements BankAccount {
+  @Expose()
+  id: string;
+
+  @Expose()
+  description: string;
+
+  @Expose()
+  initialValue: number;
+
+  @Expose()
+  userId: string;
+
+  @Expose()
+  active: boolean;
+
+  @Expose()
+  createdAt: Date;
+
+  updatedAt: Date;
+  deletedAt: Date;
+
+  constructor(bankAccount: BankAccount) {
+    Object.assign(this, bankAccount);
+  }
+}
+```
+
+### Padrões de Response
+- Use `@Exclude()` na classe
+- Use `@Expose()` nos campos que devem ser retornados
+- Use `@Transform()` para converter `bigint` para `string`
+- Implemente a interface do Prisma
+- Use constructor para inicializar o objeto
+- Exclua campos sensíveis como `updatedAt`, `deletedAt`
+
+## Convenções Gerais
+
+### Nomenclatura
+- Use PascalCase para classes: `CreateBankAccountController`
+- Use camelCase para variáveis e métodos: `createAccountService`
+- Use kebab-case para arquivos: `create.bank-account.controller.ts`
+- Use UPPER_SNAKE_CASE para constantes: `CREATE_BANK_ACCOUNT_SWAGGER`
+
+### Espaçamento e Formatação
+- Use 2 espaços para indentação
+- Use linha em branco entre métodos
+- Use linha em branco entre grupos de imports
+- Use ponto e vírgula no final das declarações
+- Use aspas simples para strings
+
+### Comentários no Código
+- **Evite comentários no código**: Prefira escrever código autoexplicativo
+- **Código claro é melhor que comentários**: Use nomes descritivos para variáveis, métodos e classes
+- **Comentários desatualizados são piores que nenhum comentário**: Se o código mudar, os comentários podem ficar desatualizados
+- **Use JSDoc apenas para APIs públicas**: Documente apenas métodos e classes que são parte da API pública
+- **Comentários devem explicar o "porquê", não o "o quê"**: Se precisar comentar, explique a razão da decisão, não o que o código faz
+
+**Exemplos de Boas Práticas:**
+```typescript
+// ❌ Evite - Código com comentários desnecessários
+// Verifica se o usuário existe
+const user = await this.userRepository.findById(userId);
+if (!user) {
+  // Lança erro se usuário não encontrado
+  throw new NotFoundException('User not found');
+}
+
+// ✅ Prefira - Código autoexplicativo
+const user = await this.userRepository.findById(userId);
+if (!user) {
+  throw new NotFoundException('User not found');
+}
+
+// ❌ Evite - Nomes genéricos que precisam de comentários
+async process(data: any) {
+  // Valida dados de entrada
+  if (!data.description) {
+    throw new BadRequestException('Description is required');
+  }
+  
+  // Cria conta bancária
+  const account = await this.repository.create(data);
+  
+  // Retorna resposta formatada
+  return new BankAccountResponse(account);
+}
+
+// ✅ Prefira - Nomes descritivos que explicam a intenção
+async handle(createAccountDto: CreateBankAccountDTO): Promise<BankAccountResponse> {
+  await this.validateAccountData(createAccountDto);
+  
+  const account = await this.createAccountEntity(createAccountDto);
+  
+  return new BankAccountResponse(account);
+}
+
+// ✅ Use JSDoc apenas para APIs públicas complexas
+/**
+ * Calcula o período da fatura do cartão baseado no dia de fechamento
+ * @param card - Cartão com informações de fechamento
+ * @param month - Mês da fatura
+ * @param year - Ano da fatura
+ * @returns Dados do período da fatura
+ */
+async calculateInvoicePeriod(card: Card, month: number, year: number): Promise<InvoicePeriodData> {
+  // ... implementação
+}
+```
+
+### Logs da Aplicação
+- **Use Logger do NestJS**: Sempre utilize `Logger` do `@nestjs/common` ao invés de `console.log`
+- **Logs estruturados**: Para objetos, utilize `JSON.stringify()`
+- **Inclua contexto**: Sempre registre IDs relevantes (userId, cardId, etc.)
+- **Logue início, sucesso e erro**: Logue parâmetros de entrada, resultados importantes e erros
+- **Use níveis apropriados**: `logger.log()` para info/debug, `logger.error()` para erros, `logger.warn()` para avisos
+
+**Exemplo de uso:**
+```typescript
+import { Injectable, Logger } from '@nestjs/common';
+
+@Injectable()
+export class ExampleService {
+  private readonly logger = new Logger(ExampleService.name);
+
+  async handle(params: { userId: string; description: string }) {
+    this.logger.log(`Iniciando operação com params: ${JSON.stringify(params)}`);
+    try {
+      // ... lógica
+      this.logger.log(`Operação concluída para userId ${params.userId}`);
+    } catch (error) {
+      this.logger.error(`Erro ao processar userId ${params.userId}: ${error.message}`);
+      throw error;
+    }
+  }
+}
+```
+
+**Boas práticas:**
+- Não exponha dados sensíveis nos logs
+- Sempre inclua contexto suficiente para rastrear o fluxo
+- Prefira logs detalhados em operações críticas e erros
+
+### Tratamento de Erros
+- Use exceções específicas do NestJS
+- Sempre valide dados antes de processar
+- Use mensagens de erro descritivas
+- Sempre verifique existência de entidades antes de operações
+
+### Tipagem
+- Sempre use tipos explícitos
+- Use interfaces do Prisma quando possível
+- Use DTOs para transferência de dados
+- Evite `any` - use tipos específicos
+
+#### Tipos do Prisma
+- **Importe tipos primitivos do Prisma**: Use `import { Card, TransactionType, User } from '@prisma/client'`
+- **Prefira tipos do Prisma**: Sempre que possível, use os tipos gerados pelo Prisma
+- **Evite `any`**: Substitua `any` por tipos específicos do Prisma ou DTOs tipados
+- **Use tipos compostos**: Para objetos complexos, crie types que estendem tipos do Prisma
+
+**Exemplos de Boas Práticas:**
+```typescript
+// ❌ Evite
+async calculateInvoicePeriod(card: any, month: number, year: number) {
+  // ...
+}
+
+// ✅ Prefira
+async calculateInvoicePeriod(card: Card, month: number, year: number) {
+  // ...
+}
+
+// ❌ Evite
+async calculateTransactionTotals(transactions: any[]) {
+  // ...
+}
+
+// ✅ Prefira
+async calculateTransactionTotals(transactions: Transaction[]) {
+  // ...
+}
+
+// ✅ Para objetos complexos, crie types tipados
+type InvoicePeriodData = {
+  invoiceMonth: number;
+  invoiceYear: number;
+  periodStart: Date;
+  periodEnd: Date;
+};
+
+type TransactionTotals = {
+  totalExpenses: number;
+  totalIncome: number;
+  invoiceBalance: number;
+};
+
+async calculateInvoicePeriod(card: Card, month: number, year: number): Promise<InvoicePeriodData> {
+  // ...
+}
+
+async calculateTransactionTotals(transactions: Transaction[]): Promise<TransactionTotals> {
+  // ...
+}
+```
+
+#### Tipagem em Mappers
+- Use tipos do Prisma para parâmetros de entrada
+- Crie types específicos para retornos de mappers
+- Evite `any` em transformações de dados
+
+```typescript
+// ✅ Mapper com tipagem adequada
+@Injectable()
+export class InvoiceCardMapper {
+  mapInvoiceResponse(
+    card: Card,
+    transactions: Transaction[],
+    periodData: InvoicePeriodData,
+    totals: TransactionTotals,
+  ): CardInvoiceResponse {
+    return {
+      cardId: card.id,
+      cardDescription: card.description,
+      // ... resto do mapeamento
+    };
+  }
+}
+```
+
+#### Tipagem em Services
+- Use tipos do Prisma para entidades
+- Crie types para dados intermediários
+- Mantenha tipagem consistente em toda a cadeia
+
+```typescript
+// ✅ Service com tipagem adequada
+@Injectable()
+export class GetInvoiceCardService implements AppService {
+  async validateCardExists(data: GetInvoiceCardDTO): Promise<void> {
+    const card: Card | null = await this.cardsRepository.find({
+      userId: data.userId,
+      id: data.cardId,
+    });
+
+    if (!card) {
+      throw new NotFoundException('Card not found');
+    }
+  }
+
+  async handle(data: GetInvoiceCardDTO): Promise<CardInvoiceResponse> {
+    // ... lógica com tipos específicos
+  }
+}
+```
+
+#### Benefícios da Tipagem Adequada
+- **IntelliSense**: Melhor autocompletar e detecção de erros
+- **Refatoração Segura**: Mudanças de schema refletem automaticamente no código
+- **Documentação**: Tipos servem como documentação viva
+- **Manutenibilidade**: Código mais fácil de entender e manter
+- **Debugging**: Erros de tipo detectados em tempo de compilação
+
+#### Types Compartilhados
+- **Crie arquivos de types**: Use pasta `protocols/` para types compartilhados
+- **Evite duplicação**: Compartilhe types entre services e mappers
+- **Nomenclatura**: Use sufixo `.types.ts` para arquivos de types
+- **Organização**: Agrupe types relacionados em um arquivo
+
+**Estrutura Recomendada:**
+```
+src/modules/cards/
+├── protocols/
+│   ├── invoice.types.ts
+│   ├── card.types.ts
+│   └── validators/
+│       └── get-invoice.card.request.dto.ts
+├── services/
+├── mappers/
+└── controllers/
+```
+
+**Exemplo de Types Compartilhados:**
+```
+export type InvoicePeriodData = {
+  invoiceMonth: number;
+  invoiceYear: number;
+  periodStart: Date;
+  periodEnd: Date;
+};
+
+export type TransactionTotals = {
+  totalExpenses: number;
+  totalIncome: number;
+  invoiceBalance: number;
+};
+
+export type TransactionResponse = {
+  id: string;
+  description: string;
+  value: number;
+  type: string;
+  createdAt: Date;
+  categoryId: string | null;
+};
+```
+
+### Performance
+- Use `findFirst` para consultas únicas
+- Use `findMany` para listas
+- Sempre inclua `userId` em consultas para segurança
+
+### Segurança
+- Sempre extraia `userId` do token
+- Sempre valide permissões do usuário
+- Use `userId` em todas as consultas
+- Não exponha dados sensíveis nos responses
+
+#### Parâmetros como Objetos
+- **Use objetos para múltiplos parâmetros**: Prefira objetos em vez de múltiplos parâmetros individuais
+- **Facilita manutenção**: Adicionar ou remover parâmetros não quebra a assinatura do método
+- **Melhora legibilidade**: Parâmetros nomeados são mais claros que posicionais
+- **Evita parâmetros opcionais**: Todos os parâmetros são explicitamente nomeados
+
+**Exemplos de Boas Práticas:**
+```typescript
+// ❌ Evite - Múltiplos parâmetros individuais
+async createInstallmentTransactions(
+  invoiceId: string,
+  cardId: string,
+  userId: string,
+  remainingAmount: number,
+  installmentCount: number,
+  installmentAmount: number,
+) {
+  // ... implementação
+}
+
+// ✅ Prefira - Objeto com parâmetros nomeados
+async createInstallmentTransactions(params: {
+  invoiceId: string;
+  cardId: string;
+  userId: string;
+  remainingAmount: number;
+  installmentCount: number;
+  installmentAmount: number;
+}) {
+  // ... implementação
+}
+
+// ❌ Evite - Parâmetros posicionais confusos
+async calculateInvoicePeriod(
+  card: Card,
+  month: number,
+  year: number,
+  includeTransactions: boolean,
+  groupByCategory: boolean,
+) {
+  // ... implementação
+}
+
+// ✅ Prefira - Objeto com parâmetros claros
+async calculateInvoicePeriod(params: {
+  card: Card;
+  month: number;
+  year: number;
+  includeTransactions: boolean;
+  groupByCategory: boolean;
+}) {
+  // ... implementação
+}
+
+// ✅ Para métodos simples com poucos parâmetros, parâmetros individuais são aceitáveis
+async findById(id: string): Promise<Entity | null> {
+  // ... implementação
+}
+
+async findByUserAndCard(userId: string, cardId: string): Promise<Entity[]> {
+  // ... implementação
+}
+```
+
+**Benefícios dos Objetos de Parâmetros:**
+- **Flexibilidade**: Fácil adicionar novos parâmetros sem quebrar código existente
+- **Clareza**: Parâmetros nomeados são autoexplicativos
+- **Manutenção**: Mudanças na ordem dos parâmetros não afetam chamadas
+- **Extensibilidade**: Novos parâmetros opcionais podem ser adicionados facilmente
+- **Refatoração**: Mudanças na assinatura do método são menos impactantes
