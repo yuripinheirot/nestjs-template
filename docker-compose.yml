@@ -1,11 +1,7 @@
-version: '3.9'
-
 volumes:
   app-vol:
   node-modules-vol:
-  mssql-vol:
-  keycloak-vol:
-  redis-vol:
+  postgres-vol:
 
 networks:
   app-network:
@@ -13,8 +9,9 @@ networks:
 
 services:
   base: &base
-    hostname: base
-    image: node:22.14-alpine3.20
+    build:
+      context: .
+      dockerfile: Dockerfile
     working_dir: /home/node/app
     volumes:
       - ./:/home/node/app
@@ -24,7 +21,7 @@ services:
 
   app:
     <<: *base
-    hostname: app
+    container_name: app
     env_file:
       - ./.env
     ports:
@@ -32,28 +29,25 @@ services:
       - 9229:9229
     command: ash -c "yarn install && yarn dev"
 
-  redis:
-    hostname: redis
-    image: 'redis:alpine'
-    ports:
-      - 6379:6379
+  postgres:
+    image: postgres:16
+    container_name: postgres
     volumes:
-      - redis-vol:/home/node/app/data/redis
-    networks:
-      - app-network
-
-  redis-commander:
-    image: rediscommander/redis-commander:latest
-    environment:
-      - REDIS_HOSTS=local:redis:6379
-      - HTTP_USER=admin
-      - HTTP_PASSWORD=admin
+      - postgres-vol:/var/lib/postgresql/data
     ports:
-      - 8081:8081
-    depends_on:
-      - redis
+      - ${POSTGRES_PORT:-5432}:5432
+    restart: always
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     networks:
       - app-network
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres']
+      interval: 5s
+      timeout: 10s
+      retries: 5
 
   specs:
     <<: *base

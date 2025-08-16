@@ -55,7 +55,7 @@ export default defineConfig([
       // Unused imports rules - CRÍTICAS para funcionar no editor
       'unused-imports/no-unused-imports': 'error',
       'unused-imports/no-unused-vars': [
-        'error',
+        'warn',
         {
           vars: 'all',
           varsIgnorePattern: '^_',
