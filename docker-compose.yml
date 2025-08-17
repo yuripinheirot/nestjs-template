@@ -1,63 +1,79 @@
-version: '3.9'
-
 volumes:
   app-vol:
-  node-modules-vol:
-  mssql-vol:
-  keycloak-vol:
-  redis-vol:
+  postgres-vol:
 
 networks:
   app-network:
-    name: app-network
+    driver: bridge
 
 services:
   base: &base
-    hostname: base
-    image: node:22.14-alpine3.20
+    build:
+      target: development
+      context: .
+      dockerfile: Dockerfile
     working_dir: /home/node/app
+    user: node
+    env_file:
+      - .env
     volumes:
       - ./:/home/node/app
-      - node-modules-vol:/home/node/app/node_modules
     networks:
       - app-network
 
-  app:
+  api:
     <<: *base
-    hostname: app
+    container_name: api
     env_file:
       - ./.env
     ports:
       - 3003:3003
       - 9229:9229
-    command: ash -c "yarn install && yarn dev"
-
-  redis:
-    hostname: redis
-    image: 'redis:alpine'
-    ports:
-      - 6379:6379
-    volumes:
-      - redis-vol:/home/node/app/data/redis
-    networks:
-      - app-network
-
-  redis-commander:
-    image: rediscommander/redis-commander:latest
-    environment:
-      - REDIS_HOSTS=local:redis:6379
-      - HTTP_USER=admin
-      - HTTP_PASSWORD=admin
-    ports:
-      - 8081:8081
+    command: yarn dev
     depends_on:
-      - redis
+      db:
+        condition: service_healthy
+      prisma-studio:
+        condition: service_started
+
+  db:
+    image: postgres:16
+    container_name: postgres
+    volumes:
+      - postgres-vol:/var/lib/postgresql/data
+    ports:
+      - ${POSTGRES_PORT:-5432}:5432
+    restart: always
+    environment:
+      POSTGRES_DB: api
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     networks:
       - app-network
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres']
+      interval: 5s
+      timeout: 10s
+      retries: 5
+  
+  prisma-studio:
+    <<: *base
+    container_name: prisma-studio
+    command: npx prisma studio --port 5555 --browser none
+    ports:
+      - '5555:5555'
+    env_file:
+      - .env
+    networks:
+      - app-network
+    depends_on:
+      db:
+        condition: service_healthy
+
 
   specs:
     <<: *base
-    command: ash -c "yarn install && yarn test"
+    command: yarn test
     env_file:
       - ./.env
     environment:

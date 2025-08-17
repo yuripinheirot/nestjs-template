@@ -49,7 +49,7 @@ async function bootstrap() {
 
   await app.listen(APP_PORT, () => {
     logger.log(
-      `Server started successfully 🚀 | Port: ${APP_PORT} | Env: ${ENV}`,
+      `Server started successfully 🚀 | Port: ${APP_PORT || 3003} | Env: ${ENV || 'local'}`,
       'NestApplication',
     );
   });
