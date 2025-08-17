@@ -1,4 +1,4 @@
-import { Logger, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 
 import { CreateUserService } from './services/create.user.service';
 import { CreateUserController } from './controllers/create/create.user.controller';
@@ -9,6 +9,7 @@ import { FindOneUserService } from './services/find-one.user.service';
 import { PrismaService } from '@/services/prisma.service';
 import { EncryptService } from '@/services/encrypt.service';
 import { JwtVerifyService } from '@/services/jwt-verify.service';
+import { AppLoggerService } from '@/utils/app-logger/app-logger.service';
 
 @Module({
   imports: [],
@@ -20,7 +21,7 @@ import { JwtVerifyService } from '@/services/jwt-verify.service';
     FindOneUserService,
     EncryptService,
     JwtVerifyService,
-    Logger,
+    AppLoggerService,
   ],
 })
 export class UsersModule {}

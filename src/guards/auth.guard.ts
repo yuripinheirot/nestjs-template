@@ -2,7 +2,6 @@ import {
   CanActivate,
   ExecutionContext,
   Inject,
-  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Request } from 'express';
@@ -12,6 +11,7 @@ import { JwtVerifyService } from '@/services/jwt-verify.service';
 import { TokenData } from '@/models/types/token-data.type';
 import { UsersRepository } from '@/modules/users/repository/users.repository';
 import { PublicRoute } from '@/decorators/public-route.decorator';
+import { AppLoggerService } from '@/utils/app-logger/app-logger.service';
 
 export class AuthGuard implements CanActivate {
   constructor(
@@ -21,7 +21,7 @@ export class AuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     @Inject(UsersRepository)
     private readonly usersRepository: UsersRepository,
-    private readonly logger: Logger,
+    private readonly logger: AppLoggerService,
   ) {}
 
   private extractTokenFromHeader(request: Request): string | undefined {

@@ -1,8 +1,9 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
 
 import { TokenData } from '@/models/types/token-data.type';
+import { AppLoggerService } from '@/utils/app-logger/app-logger.service';
 
 @Injectable()
 export class JwtVerifyService {
@@ -10,7 +11,7 @@ export class JwtVerifyService {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly logger: Logger,
+    private readonly logger: AppLoggerService,
   ) {
     this.JWT_SECRET = this.configService.getOrThrow('JWT_SECRET');
   }

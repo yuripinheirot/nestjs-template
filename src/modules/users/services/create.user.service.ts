@@ -1,7 +1,8 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 
 import { AppService } from '@/models/types/service.type';
 import { EncryptService } from '@/services/encrypt.service';
+import { AppLoggerService } from '@/utils/app-logger/app-logger.service';
 
 import { CreateUserDto } from '../protocols/create.user.dto';
 import { UsersRepository } from '../repository/users.repository';
@@ -11,7 +12,7 @@ export class CreateUserService implements AppService<CreateUserDto> {
   constructor(
     private readonly usersRepository: UsersRepository,
     private readonly encryptService: EncryptService,
-    private readonly logger: Logger,
+    private readonly logger: AppLoggerService,
   ) {}
 
   private async validateUser(data: CreateUserDto) {

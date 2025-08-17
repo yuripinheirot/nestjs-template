@@ -1,6 +1,7 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { AppService } from '@/models/types/service.type';
+import { AppLoggerService } from '@/utils/app-logger/app-logger.service';
 
 import { UsersRepository } from '../repository/users.repository';
 import { FindUserDto } from '../protocols/find.user.dto';
@@ -9,7 +10,7 @@ import { FindUserDto } from '../protocols/find.user.dto';
 export class FindOneUserService implements AppService {
   constructor(
     private readonly usersRepository: UsersRepository,
-    private readonly logger: Logger,
+    private readonly logger: AppLoggerService,
   ) {}
 
   async handle(where: FindUserDto) {
