@@ -4,22 +4,28 @@ volumes:
   postgres-vol:
 
 networks:
-  - app-network
+  app-network:
+    driver: bridge
+
 services:
   base: &base
     build:
+      target: development
       context: .
       dockerfile: Dockerfile
     working_dir: /home/node/app
+    user: node
+    env_file:
+      - .env
     volumes:
       - ./:/home/node/app
       - node-modules-vol:/home/node/app/node_modules
     networks:
       - app-network
 
-  app:
+  api:
     <<: *base
-    container_name: app
+    container_name: api
     env_file:
       - ./.env
     ports:
@@ -36,7 +42,7 @@ services:
       - ${POSTGRES_PORT:-5432}:5432
     restart: always
     environment:
-      POSTGRES_DB: app
+      POSTGRES_DB: api
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     networks:

@@ -1,11 +1,11 @@
-FROM node:23-alpine as api
+FROM node:24-alpine AS development
 
 WORKDIR /home/node/app
 
 COPY package.json yarn.lock ./
+COPY ./prisma ./prisma
 
 RUN yarn install --frozen-lockfile
-
 RUN npx prisma generate
 
 COPY . .

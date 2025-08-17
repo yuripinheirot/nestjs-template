@@ -19,8 +19,8 @@
     "test:c": "yarn test --coverage",
     "test:u": "yarn test -c jest-unit-config.js",
     "test:f": "yarn test:v -c jest-feature-config.js",
-    "generate": "sudo rm -rf ./prisma/factory/generated && prisma generate",
-    "migrate": "docker compose run app npx prisma migrate dev",
+    "generate": "rm -rf ./prisma/factory/generated && prisma generate",
+    "migrate": "npx prisma migrate dev",
     "studio": "prisma studio"
   },
   "dependencies": {
